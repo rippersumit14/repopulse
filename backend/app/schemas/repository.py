@@ -1,9 +1,13 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field, field_validator
 
 
 class RepositoryAnalysisRequest(BaseModel):
     """
-    Data required to start a repository analysis.
+    Data required from the client to start a repository analysis.
+
+    The client only needs to provide the public GitHub repository URL.
     """
 
     repository_url: str = Field(
@@ -25,38 +29,81 @@ class RepositoryAnalysisRequest(BaseModel):
 
         github_prefix = "https://github.com/"
 
-        # RepoPulse currently supports only standard HTTPS GitHub URLs.
+        # RepoPulse currently accepts only standard HTTPS GitHub URLs.
         if not value.startswith(github_prefix):
             raise ValueError(
                 "Repository URL must start with https://github.com/"
             )
 
-        # Remove the GitHub domain so only "owner/repository" remains.
+        # Remove the GitHub domain and keep only "owner/repository".
         repository_path = value.removeprefix(github_prefix)
 
-        # Remove a trailing slash to normalize equivalent URLs.
+        # Normalize URLs that contain a trailing slash.
         repository_path = repository_path.rstrip("/")
 
-        # Git clone URLs may end in ".git"; treat them as the same repository.
+        # Treat Git clone URLs ending in ".git" as normal repository URLs.
         if repository_path.endswith(".git"):
             repository_path = repository_path.removesuffix(".git")
 
-        # A repository path must contain exactly:
+        # A valid repository path must contain exactly:
         # owner/repository
         parts = repository_path.split("/")
 
         if len(parts) != 2:
             raise ValueError(
-                "URL must point to a GitHub repository in owner/repository format."
+                "URL must point to a GitHub repository "
+                "in owner/repository format."
             )
 
         owner, repository = parts
 
-        # Both parts must contain an actual value.
+        # Both the owner and repository name must contain a value.
         if not owner or not repository:
             raise ValueError(
                 "GitHub repository owner and repository name are required."
             )
 
-        # Return one consistent URL format for the rest of the application.
+        # Return one normalized URL format for the rest of RepoPulse.
         return f"{github_prefix}{owner}/{repository}"
+
+
+class RepositoryMetadataResponse(BaseModel):
+    """
+    Clean repository metadata returned by the RepoPulse API.
+
+    This model prevents clients from depending directly on
+    GitHub's raw API response structure.
+    """
+
+    # Basic repository information
+    id: int
+    name: str
+    full_name: str
+    description: str | None = None
+    repository_url: str
+
+    # Repository owner
+    owner: str
+    owner_avatar_url: str
+
+    # Repository statistics
+    stars: int
+    forks: int
+    watchers: int
+    open_issues: int
+
+    # Technical information
+    language: str | None = None
+    topics: list[str]
+    default_branch: str
+
+    # Repository state
+    license: str | None = None
+    is_fork: bool
+    archived: bool
+    visibility: str
+
+    # Repository activity timestamps
+    created_at: datetime
+    updated_at: datetime
+    pushed_at: datetime

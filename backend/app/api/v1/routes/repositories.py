@@ -1,7 +1,11 @@
 from fastapi import APIRouter, HTTPException
+
 from app.integrations.github.client import GitHubClient
 from app.integrations.github.exceptions import GitHubRepositoryNotFoundError
-from app.schemas.repository import RepositoryAnalysisRequest
+from app.schemas.repository import (
+    RepositoryAnalysisRequest,
+    RepositoryMetadataResponse,
+)
 from app.utils.github import extract_github_repository
 
 
@@ -10,15 +14,16 @@ router = APIRouter(
     tags=["Repositories"],
 )
 
+
 @router.post("/validate")
 async def validate_repository(
-        request: RepositoryAnalysisRequest,
+    request: RepositoryAnalysisRequest,
 ) -> dict[str, str | bool]:
     """
-    Validate and normalize a GitHub Repository URl.
+    Validate and normalize a GitHub repository URL.
 
     Pydantic validates the incoming request before this function runs,
-    so reaching this point means the repository URL passed validation
+    so reaching this point means the repository URL passed validation.
     """
 
     return {
@@ -26,13 +31,77 @@ async def validate_repository(
         "valid": True,
     }
 
-@router.post("/metadata")
+
+@router.post(
+    "/metadata",
+    response_model=RepositoryMetadataResponse,
+)
 async def get_repository_metadata(
-        request: RepositoryAnalysisRequest,
-) -> dict:
+    request: RepositoryAnalysisRequest,
+) -> RepositoryMetadataResponse:
     """
-    Validate a GitHub repo URL and fetch its metadata from GitHub
+    Validate a GitHub repository URL and fetch its metadata from GitHub.
     """
-    
-    #The pydantic validator has already cleaned and validated the URL
-    owner, repository = extract_github
+
+    # Extract the repository owner and name from the validated URL.
+    owner, repository = extract_github_repository(
+        request.repository_url
+    )
+
+    # Create the client responsible for communicating with GitHub.
+    github_client = GitHubClient()
+
+    try:
+        # Fetch the raw repository information asynchronously from GitHub.
+        repository_data = await github_client.get_repository(
+            owner=owner,
+            repository=repository,
+        )
+
+    except GitHubRepositoryNotFoundError as exc:
+        # Convert the internal GitHub error into an HTTP 404 response.
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    # Convert GitHub's large raw response into RepoPulse's
+    # smaller and stable repository metadata response.
+    return RepositoryMetadataResponse(
+        # Basic repository information
+        id=repository_data["id"],
+        name=repository_data["name"],
+        full_name=repository_data["full_name"],
+        description=repository_data.get("description"),
+        repository_url=repository_data["html_url"],
+
+        # Repository owner
+        owner=repository_data["owner"]["login"],
+        owner_avatar_url=repository_data["owner"]["avatar_url"],
+
+        # Repository statistics
+        stars=repository_data["stargazers_count"],
+        forks=repository_data["forks_count"],
+        watchers=repository_data["watchers_count"],
+        open_issues=repository_data["open_issues_count"],
+
+        # Technical information
+        language=repository_data.get("language"),
+        topics=repository_data.get("topics", []),
+        default_branch=repository_data["default_branch"],
+
+        # Repository state
+        license=(
+            repository_data["license"]["spdx_id"]
+            if repository_data.get("license")
+            else None
+        ),
+        is_fork=repository_data["fork"],
+        archived=repository_data["archived"],
+        visibility=repository_data["visibility"],
+
+        # Repository activity timestamps
+        created_at=repository_data["created_at"],
+        updated_at=repository_data["updated_at"],
+        pushed_at=repository_data["pushed_at"],
+    )

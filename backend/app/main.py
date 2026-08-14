@@ -15,7 +15,7 @@ app = FastAPI(
 
 
 # Allow the configured React frontend to communicate with this API
-# when the browser considers the frontend and backend different origins.
+# when the browser considers the frontend and backend dveifferent origins.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
