@@ -5,8 +5,12 @@ from app.integrations.github.exceptions import GitHubRepositoryNotFoundError
 from app.schemas.repository import (
     RepositoryAnalysisRequest,
     RepositoryMetadataResponse,
+    RepositoryLanguagesResponse,
 )
 from app.utils.github import extract_github_repository
+
+from app.services.repository_analysis import calculate_language_breakdown
+
 
 
 router = APIRouter(
@@ -105,3 +109,83 @@ async def get_repository_metadata(
         updated_at=repository_data["updated_at"],
         pushed_at=repository_data["pushed_at"],
     )
+
+
+@router.post(
+    "/languages",
+    response_model=RepositoryLanguagesResponse,
+)
+
+async def get_repository_languages(
+        request: RepositoryAnalysisRequest,
+)-> RepositoryLanguagesResponse:
+    """
+    Fetch and analyze the programming languages used
+    in a GitHub repository.
+    """
+
+    # The repository URL has already been validated and normalized.
+    owner, repository = extract_github_repository(
+        request.repository_url
+    )
+
+    github_client = GitHubClient()
+
+    try:
+        # Fetch raw language byte counts from GitHub.
+        language_bytes = await github_client.get_repository_languages(
+            owner=owner,
+            repository=repository,
+        )
+
+    except GitHubRepositoryNotFoundError as exc:
+        #Convert the internal GitHub error into an HTTP 404 Response.
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+
+    #Convert GitHub's byte counts into Repopulse percentages
+    return calculate_language_breakdown(language_bytes)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

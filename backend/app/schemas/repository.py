@@ -107,3 +107,52 @@ class RepositoryMetadataResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     pushed_at: datetime
+
+class LanguageBreakdown(BaseModel):
+    """
+    Information about one programming language detected in a GitHub repository.
+    """
+
+    name: str
+    bytes: int
+    percentage: float
+
+class RepositoryLanguagesResponse(BaseModel):
+    #Language Composition of a GitHub Repo
+    total_bytes: int
+    languages: list[LanguageBreakdown]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
