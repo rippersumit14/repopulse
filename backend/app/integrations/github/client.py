@@ -1,5 +1,5 @@
+from datetime import datetime
 import httpx
-
 from app.integrations.github.exceptions import GitHubRepositoryNotFoundError
 
 
@@ -68,6 +68,62 @@ class GitHubClient:
 
         return response.json()
 
+    async def get_repository_commits(
+            self,
+            owner: str,
+            repository: str,
+            since: datetime,
+    ) -> list[dict]:
+        """
+        Fetch repository commits created since a specific date.
+
+        Pagination is followed so active repositories are not
+        artificially limited to only the first 100 commits.
+        """
+
+        url = (
+            f"{self.BASE_URL}/repos/"
+            f"{owner}/{repository}/commits"
+        )
+
+        commits: list[dict] = []
+
+        page = 1
+        per_page = 100
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            while True:
+                params = {
+                    "since": since.isoformat(),
+                    "per_page": per_page,
+                    "page": page
+                }
+
+                response = await client.get(
+                    url,
+                    params=params,
+                )
+
+                if response.status_code == 404:
+                    raise GitHubRepositoryNotFoundError(
+                        f"GitHub repository '{owner}/{repository}' was not found."
+                    )
+
+                response.raise_for_status()
+
+                page_commits = response.json()
+
+                commits.extend(page_commits)
+
+
+                #If GitHub returned fewer than 100 commits,
+                #there are no more pages to fetch.
+                if len(page_commits) < per_page:
+                    break
+
+                page += 1
+
+        return commits
 
 
 

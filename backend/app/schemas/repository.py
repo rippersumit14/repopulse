@@ -1,7 +1,5 @@
 from datetime import datetime
-
 from pydantic import BaseModel, Field, field_validator
-
 
 class RepositoryAnalysisRequest(BaseModel):
     """
@@ -121,6 +119,24 @@ class RepositoryLanguagesResponse(BaseModel):
     #Language Composition of a GitHub Repo
     total_bytes: int
     languages: list[LanguageBreakdown]
+
+
+class RepositoryCommitActivityResponse(BaseModel):
+    """
+    Commit activity summary for a GitHub Repository.
+
+    These fields are calculated by RepoPulse from recent
+    GitHub commit data.
+    """
+
+    total_recent_commits: int
+    commits_last_7_days: int
+    commits_last_30_days: int
+
+    last_commit_at: datetime | None = None
+    days_since_last_commit: int | None = None
+
+    activity_level: str
 
 
 

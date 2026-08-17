@@ -1,16 +1,20 @@
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException
+
 
 from app.integrations.github.client import GitHubClient
 from app.integrations.github.exceptions import GitHubRepositoryNotFoundError
 from app.schemas.repository import (
     RepositoryAnalysisRequest,
-    RepositoryMetadataResponse,
+    RepositoryCommitActivityResponse,
     RepositoryLanguagesResponse,
+    RepositoryMetadataResponse,
+)
+from app.services.repository_analysis import (
+    calculate_commit_activity,
+    calculate_language_breakdown,
 )
 from app.utils.github import extract_github_repository
-
-from app.services.repository_analysis import calculate_language_breakdown
-
 
 
 router = APIRouter(
@@ -115,13 +119,14 @@ async def get_repository_metadata(
     "/languages",
     response_model=RepositoryLanguagesResponse,
 )
-
 async def get_repository_languages(
         request: RepositoryAnalysisRequest,
 )-> RepositoryLanguagesResponse:
     """
-    Fetch and analyze the programming languages used
-    in a GitHub repository.
+    # Convert the internal GitHub error into an HTTP 404 response.
+    # Convert GitHub's byte counts into RepoPulse percentages.
+    # Extract owner and repository name from the validated GitHub URL.
+    # Fetch recent commit data from GitHub.
     """
 
     # The repository URL has already been validated and normalized.
@@ -151,7 +156,44 @@ async def get_repository_languages(
 
 
 
+@router.post(
+    "/activity",
+    response_model=RepositoryCommitActivityResponse,
+)
+async def get_repository_activity(
+        request: RepositoryAnalysisRequest,
+) -> RepositoryCommitActivityResponse:
+    """
+    Fetch recent repository commits and calculate
+    basic commit activity metrics
+    """
 
+    #Extract owner and repository name from the validated GitHub URL.
+    owner, repository = extract_github_repository(
+        request.repository_url
+    )
+
+    since = datetime.now(timezone.utc) - timedelta(days=30)
+
+    github_client = GitHubClient()
+
+    try:
+        #Fetch recent commit data from GitHub
+        commits = await github_client.get_repository_commits(
+            owner=owner,
+            repository=repository,
+            since=since,
+        )
+
+    except GitHubRepositoryNotFoundError as exc:
+        #Convert our internal GitHub error into an HTTP 404 response.
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    # Convert raw GitHub commits into RepoPulse activity metrics
+    return calculate_commit_activity(commits)
 
 
 
