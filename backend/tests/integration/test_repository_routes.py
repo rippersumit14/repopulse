@@ -7,6 +7,8 @@ from tests.conftest import register_and_login
 
 
 def repository_payload() -> dict:
+    """Mock GitHub repository response shaped like the real integration data."""
+
     return {
         "id": 100,
         "name": "repo",

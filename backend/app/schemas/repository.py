@@ -3,6 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+
 class RepositoryAnalysisRequest(BaseModel):
     """
     Data required from the client to start a repository analysis.
@@ -108,6 +109,7 @@ class RepositoryMetadataResponse(BaseModel):
     updated_at: datetime
     pushed_at: datetime
 
+
 class LanguageBreakdown(BaseModel):
     """
     Information about one programming language detected in a GitHub repository.
@@ -117,8 +119,10 @@ class LanguageBreakdown(BaseModel):
     bytes: int
     percentage: float
 
+
 class RepositoryLanguagesResponse(BaseModel):
-    #Language Composition of a GitHub Repo
+    """Language composition of a GitHub repository."""
+
     total_bytes: int
     languages: list[LanguageBreakdown]
 
@@ -180,6 +184,8 @@ class RepositoryAnalysisResponse(BaseModel):
 
 
 class AnalysisSnapshotResponse(BaseModel):
+    """Stored point-in-time analysis row exposed if needed by future routes."""
+
     id: int
     repository_id: int
     stars: int
@@ -197,6 +203,8 @@ HistoryRange = Literal["7d", "30d", "12m"]
 
 
 class RepositoryHistoryPoint(BaseModel):
+    """Chart-ready point for repository history graphs."""
+
     date: date
     health_score: float | None
     commits_last_30_days: int
@@ -205,44 +213,7 @@ class RepositoryHistoryPoint(BaseModel):
 
 
 class RepositoryHistoryResponse(BaseModel):
+    """History response for one requested chart range."""
+
     range: HistoryRange
     points: list[RepositoryHistoryPoint]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

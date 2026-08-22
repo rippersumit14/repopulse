@@ -1,10 +1,10 @@
+from datetime import datetime, timezone
+
 from app.schemas.repository import (
     LanguageBreakdown,
+    RepositoryCommitActivityResponse,
     RepositoryLanguagesResponse,
-    RepositoryCommitActivityResponse
 )
-
-from datetime import datetime, timezone
 
 
 def calculate_language_breakdown(
@@ -118,39 +118,3 @@ def calculate_commit_activity(
         days_since_last_commit=days_since_last_commit,
         activity_level=activity_level,
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

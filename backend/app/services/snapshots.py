@@ -20,6 +20,8 @@ def create_snapshot(
     activity_level: str,
     health_score: float,
 ) -> AnalysisSnapshot:
+    """Persist one analysis result as a historical snapshot."""
+
     snapshot = AnalysisSnapshot(
         repository_id=repository_id,
         stars=stars,
@@ -33,6 +35,7 @@ def create_snapshot(
     )
 
     try:
+        # Refresh after commit so callers can read id/analyzed_at immediately.
         db.add(snapshot)
         db.commit()
         db.refresh(snapshot)
@@ -48,6 +51,8 @@ def get_latest_snapshot(
     *,
     repository_id: int,
 ) -> AnalysisSnapshot | None:
+    """Return the newest snapshot for a repository."""
+
     statement = (
         select(AnalysisSnapshot)
         .where(AnalysisSnapshot.repository_id == repository_id)
@@ -64,6 +69,8 @@ def get_repository_snapshots(
     repository_id: int,
     history_range: HistoryRange,
 ) -> list[AnalysisSnapshot]:
+    """Load snapshots for the requested chart range in chronological order."""
+
     now = datetime.now(timezone.utc)
 
     if history_range == "7d":
@@ -90,6 +97,8 @@ def build_history_points(
     *,
     history_range: HistoryRange,
 ) -> list[RepositoryHistoryPoint]:
+    """Convert database snapshots into lightweight chart points."""
+
     if history_range != "12m":
         return [
             RepositoryHistoryPoint(
@@ -104,6 +113,8 @@ def build_history_points(
 
     latest_by_month: dict[date, AnalysisSnapshot] = {}
 
+    # For yearly charts, keep one point per month so the frontend receives a
+    # compact trend instead of many daily rows.
     for snapshot in snapshots:
         month = date(
             snapshot.analyzed_at.year,

@@ -120,6 +120,8 @@ def get_user_repository(
     user_id: int,
     repository_id: int,
 ) -> UserRepository | None:
+    """Find the per-user tracking row for a repository."""
+
     statement = select(UserRepository).where(
         UserRepository.user_id == user_id,
         UserRepository.repository_id == repository_id,
@@ -134,6 +136,8 @@ def user_tracks_repository(
     user_id: int,
     repository_id: int,
 ) -> bool:
+    """Return True only when the user has an active tracking relationship."""
+
     tracked_repository = get_user_repository(
         db=db,
         user_id=user_id,
@@ -170,6 +174,8 @@ def track_repository_for_user(
         repository_id=repository.id,
     )
 
+    # Reuse the join row when it already exists so repeated clicks on "track"
+    # are idempotent for the same user.
     if existing_user_repository is not None:
         if not existing_user_repository.is_tracked:
             existing_user_repository.is_tracked = True
@@ -183,6 +189,8 @@ def track_repository_for_user(
 
         return repository, existing_user_repository, False
 
+    # Create the user-specific tracking link without duplicating repository
+    # identity data in the repositories table.
     user_repository = UserRepository(
         user_id=user.id,
         repository_id=repository.id,

@@ -72,6 +72,7 @@ class Repository(Base):
         passive_deletes=True,
     )
 
+    # Per-user tracking state lives in the join table, not on Repository.
     user_repositories: Mapped[list["UserRepository"]] = relationship(
         back_populates="repository",
         cascade="all, delete-orphan",

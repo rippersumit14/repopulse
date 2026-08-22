@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field, field_validator
 
 
 def normalize_email(value: str) -> str:
+    """Normalize email input and reject obviously invalid addresses."""
+
     email = value.strip().lower()
 
     if "@" not in email or email.startswith("@") or email.endswith("@"):
@@ -13,6 +15,8 @@ def normalize_email(value: str) -> str:
 
 
 class UserCreateRequest(BaseModel):
+    """Request body for creating a new user account."""
+
     email: str
     password: str = Field(min_length=8, max_length=128)
     username: str | None = Field(default=None, max_length=80)
@@ -24,6 +28,8 @@ class UserCreateRequest(BaseModel):
 
 
 class UserLoginRequest(BaseModel):
+    """Request body for password-based login."""
+
     email: str
     password: str
 
@@ -34,6 +40,8 @@ class UserLoginRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
+    """Safe user data returned to clients."""
+
     id: int
     email: str
     username: str | None
@@ -42,9 +50,13 @@ class UserResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    """Bearer token response shape used by auth endpoints."""
+
     access_token: str
     token_type: str = "bearer"
 
 
 class AuthLoginResponse(TokenResponse):
+    """Login response that includes both token data and user profile data."""
+
     user: UserResponse

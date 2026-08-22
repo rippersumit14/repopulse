@@ -207,6 +207,8 @@ async def track_github_repository(
             detail=str(exc),
         ) from exc
 
+    # Store repository identity once globally, then connect it to this user
+    # through the user_repositories join table.
     tracked_repository, _, _ = track_repository_for_user(
         db=db,
         user=current_user,
@@ -246,6 +248,8 @@ async def analyze_tracked_repository(
             detail="Tracked repository was not found.",
         )
 
+    # A repository row can be shared by many users. This check ensures a user
+    # can only analyze repositories they personally track.
     if not user_tracks_repository(
         db=db,
         user_id=current_user.id,
@@ -267,6 +271,8 @@ async def analyze_tracked_repository(
             detail=str(exc),
         ) from exc
 
+    # Persist a point-in-time snapshot so charts can show trends instead of
+    # only the latest repository state.
     snapshot = create_snapshot(
         db=db,
         repository_id=repository.id,
@@ -283,6 +289,7 @@ async def analyze_tracked_repository(
     repository.last_analyzed_at = snapshot.analyzed_at
 
     try:
+        # Save the repository timestamp after the snapshot has been created.
         db.commit()
     except Exception:
         db.rollback()
@@ -321,6 +328,7 @@ def get_repository_history(
             detail="Tracked repository was not found.",
         )
 
+    # History is private to users who track the repository.
     if not user_tracks_repository(
         db=db,
         user_id=current_user.id,
@@ -344,42 +352,3 @@ def get_repository_history(
             history_range=history_range,
         ),
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

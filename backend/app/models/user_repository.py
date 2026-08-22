@@ -35,6 +35,7 @@ class UserRepository(Base):
         index=True,
     )
 
+    # Points at the shared repository record that may be tracked by many users.
     repository_id: Mapped[int] = mapped_column(
         ForeignKey(
             "repositories.id",
@@ -70,6 +71,8 @@ class UserRepository(Base):
     )
 
     __table_args__ = (
+        # One user can track a repository only once. Repeated track requests
+        # reactivate/reuse this row instead of creating duplicates.
         UniqueConstraint(
             "user_id",
             "repository_id",

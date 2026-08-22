@@ -13,6 +13,8 @@ from tests.conftest import register_and_login
 
 
 def make_metadata() -> RepositoryMetadataResponse:
+    """Build stable repository metadata for route tests without GitHub calls."""
+
     now = datetime.now(timezone.utc)
 
     return RepositoryMetadataResponse(
@@ -40,7 +42,12 @@ def make_metadata() -> RepositoryMetadataResponse:
     )
 
 
-async def fake_analyze_repository(owner: str, repository: str) -> RepositoryAnalysisResult:
+async def fake_analyze_repository(
+    owner: str,
+    repository: str,
+) -> RepositoryAnalysisResult:
+    """Replace the real analyzer so tests only cover API/database behavior."""
+
     return RepositoryAnalysisResult(
         metadata=make_metadata(),
         languages=RepositoryLanguagesResponse(total_bytes=100, languages=[]),
@@ -62,6 +69,8 @@ async def fake_analyze_repository(owner: str, repository: str) -> RepositoryAnal
 
 
 def track_repository(client: TestClient, monkeypatch) -> tuple[str, int]:
+    """Create a tracked repository through the public API and return token/id."""
+
     async def fake_get_repository(self, owner: str, repository: str) -> dict:
         metadata = make_metadata()
         return {

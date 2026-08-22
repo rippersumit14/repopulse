@@ -18,6 +18,13 @@ def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
+    """
+    Resolve the logged-in user from the Bearer token.
+
+    Protected routes depend on this function. If the token is missing,
+    expired, malformed, or points to an inactive user, FastAPI returns 401.
+    """
+
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate authentication credentials.",
@@ -25,6 +32,8 @@ def get_current_user(
     )
 
     try:
+        # JWT validation happens in the security service so every protected
+        # route follows the same token rules.
         payload = decode_access_token(token)
         subject = payload.get("sub")
     except jwt.PyJWTError as exc:
@@ -38,6 +47,8 @@ def get_current_user(
     except ValueError as exc:
         raise credentials_error from exc
 
+    # The token stores only the user id. The database remains the source of
+    # truth for current user state such as is_active.
     user = get_user_by_id(
         db=db,
         user_id=user_id,

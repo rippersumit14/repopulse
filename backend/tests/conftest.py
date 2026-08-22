@@ -27,6 +27,13 @@ TestingSessionLocal = sessionmaker(
 
 @pytest.fixture()
 def db() -> Generator[Session, None, None]:
+    """
+    Create a fresh in-memory database for each test.
+
+    StaticPool keeps the same SQLite connection alive long enough for FastAPI's
+    TestClient and SQLAlchemy session to share data during one test.
+    """
+
     Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()
 
@@ -39,6 +46,8 @@ def db() -> Generator[Session, None, None]:
 
 @pytest.fixture()
 def client(db: Session) -> Generator[TestClient, None, None]:
+    """Run the FastAPI app with the test database dependency override."""
+
     def override_get_db() -> Generator[Session, None, None]:
         yield db
 
@@ -51,6 +60,8 @@ def client(db: Session) -> Generator[TestClient, None, None]:
 
 
 def register_and_login(client: TestClient, email: str = "dev@example.com") -> str:
+    """Test helper that returns a valid Bearer token for protected routes."""
+
     client.post(
         "/api/v1/auth/register",
         json={

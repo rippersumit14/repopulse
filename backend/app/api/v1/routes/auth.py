@@ -22,6 +22,8 @@ router = APIRouter(
 
 
 def to_user_response(user: User) -> UserResponse:
+    """Convert the SQLAlchemy User model into the public API response shape."""
+
     return UserResponse(
         id=user.id,
         email=user.email,
@@ -40,6 +42,13 @@ def register_user(
     request: UserCreateRequest,
     db: Session = Depends(get_db),
 ) -> UserResponse:
+    """
+    Create a new account and return safe user data.
+
+    Password hashing is handled in the user service. This route only controls
+    HTTP behavior such as duplicate-email errors and response status codes.
+    """
+
     if get_user_by_email(db, request.email) is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -64,6 +73,8 @@ def login_user(
     request: UserLoginRequest,
     db: Session = Depends(get_db),
 ) -> AuthLoginResponse:
+    """Authenticate a user and return a JWT plus the current user profile."""
+
     user = authenticate_user(
         db=db,
         email=request.email,
@@ -92,6 +103,8 @@ def login_user(
 def read_current_user(
     current_user: User = Depends(get_current_user),
 ) -> UserResponse:
+    """Return the profile linked to the valid Bearer token."""
+
     return to_user_response(current_user)
 
 
@@ -104,6 +117,13 @@ def token_alias(
     request: UserLoginRequest,
     db: Session = Depends(get_db),
 ) -> TokenResponse:
+    """
+    OAuth2-compatible token endpoint used by FastAPI tooling.
+
+    The main frontend can use /login. This hidden alias keeps FastAPI's
+    OAuth2PasswordBearer flow working without exposing duplicate docs.
+    """
+
     user = authenticate_user(
         db=db,
         email=request.email,

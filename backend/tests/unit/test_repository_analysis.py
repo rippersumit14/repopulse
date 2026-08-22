@@ -5,10 +5,15 @@ from app.services.repository_analysis import (
     calculate_commit_activity,
     calculate_language_breakdown,
 )
-from app.schemas.repository import RepositoryCommitActivityResponse, RepositoryMetadataResponse
+from app.schemas.repository import (
+    RepositoryCommitActivityResponse,
+    RepositoryMetadataResponse,
+)
 
 
 def make_commit(days_ago: int) -> dict:
+    """Build a GitHub-like commit payload at a controlled age."""
+
     commit_date = datetime.now(timezone.utc) - timedelta(days=days_ago)
 
     return {

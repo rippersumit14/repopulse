@@ -17,6 +17,8 @@ from app.services.repository_analysis import (
 
 @dataclass(frozen=True)
 class RepositoryAnalysisResult:
+    """Single in-memory object containing every part of one analysis run."""
+
     metadata: RepositoryMetadataResponse
     languages: RepositoryLanguagesResponse
     activity: RepositoryCommitActivityResponse
@@ -24,6 +26,13 @@ class RepositoryAnalysisResult:
 
 
 def map_repository_metadata(repository_data: dict) -> RepositoryMetadataResponse:
+    """
+    Convert GitHub's raw repository JSON into RepoPulse's stable API schema.
+
+    Keeping this mapping in one place prevents routes and background jobs from
+    depending directly on GitHub field names.
+    """
+
     return RepositoryMetadataResponse(
         id=repository_data["id"],
         name=repository_data["name"],
@@ -73,10 +82,12 @@ async def analyze_repository(
         owner=owner,
         repository=repository,
     )
+    # GitHub returns language byte counts separately from repository metadata.
     language_bytes = await client.get_repository_languages(
         owner=owner,
         repository=repository,
     )
+    # Recent commit data drives activity metrics and part of the health score.
     commits = await client.get_repository_commits(
         owner=owner,
         repository=repository,

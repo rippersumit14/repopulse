@@ -8,6 +8,8 @@ from app.schemas.repository import (
 
 
 def clamp_score(value: int) -> int:
+    """Keep score values inside the public 0-100 range."""
+
     return max(0, min(100, value))
 
 
@@ -39,6 +41,8 @@ def calculate_health_score(
 
     maintenance_score = 100
 
+    # Maintenance starts from a full score and subtracts for signals that make
+    # a repository less healthy or harder to trust.
     if metadata.archived:
         maintenance_score -= 45
         reasons.append("Repository is archived.")
@@ -69,6 +73,8 @@ def calculate_health_score(
         reasons.append("Repository has a large number of open issues.")
 
     maintenance_score = clamp_score(maintenance_score)
+    # Activity has a slightly higher weight because RepoPulse Day 1 focuses on
+    # whether a repository is alive and moving.
     overall_score = clamp_score(
         round((activity_score * 0.55) + (maintenance_score * 0.45))
     )
