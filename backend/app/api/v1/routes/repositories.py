@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, HTTPException
 
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
+from app.db.dependencies import get_db
 from app.integrations.github.client import GitHubClient
 from app.integrations.github.exceptions import GitHubRepositoryNotFoundError
 from app.schemas.repository import (
@@ -9,11 +11,13 @@ from app.schemas.repository import (
     RepositoryCommitActivityResponse,
     RepositoryLanguagesResponse,
     RepositoryMetadataResponse,
+    RepositoryTrackResponse,
 )
 from app.services.repository_analysis import (
     calculate_commit_activity,
     calculate_language_breakdown,
 )
+from app.services.repository_tracking import track_repository
 from app.utils.github import extract_github_repository
 
 
@@ -123,10 +127,8 @@ async def get_repository_languages(
         request: RepositoryAnalysisRequest,
 )-> RepositoryLanguagesResponse:
     """
-    # Convert the internal GitHub error into an HTTP 404 response.
-    # Convert GitHub's byte counts into RepoPulse percentages.
-    # Extract owner and repository name from the validated GitHub URL.
-    # Fetch recent commit data from GitHub.
+    Fetch and analyze the programming languages used
+    in a GitHub repository.
     """
 
     # The repository URL has already been validated and normalized.
@@ -194,6 +196,56 @@ async def get_repository_activity(
 
     # Convert raw GitHub commits into RepoPulse activity metrics
     return calculate_commit_activity(commits)
+
+
+@router.post(
+    "/track",
+    response_model=RepositoryTrackResponse,
+)
+async def track_github_repository(
+        request:RepositoryAnalysisRequest,
+        db: Session = Depends(get_db),
+) -> RepositoryTrackResponse:
+    """
+    Verify GitHub repository and store it for RepoPulse tracking
+    """
+
+    owner, repository = extract_github_repository(
+        request.repository_url
+    )
+
+    github_client = GitHubClient()
+
+    try:
+        # Verify the repository actually exists on GitHub.
+        repository_data = await github_client.get_repository(
+            owner=owner,
+            repository=repository,
+        )
+
+    except GitHubRepositoryNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc)
+        ) from exc
+
+    tracked_repository, created = track_repository(
+        db=db,
+        github_owner=repository_data["owner"]["login"],
+        github_name=repository_data["name"],
+        repository_url=repository_data["html_url"],
+    )
+
+    return RepositoryTrackResponse(
+        id=tracked_repository.id,
+        repository_url=tracked_repository.repository_url,
+        github_owner=tracked_repository.github_owner,
+        github_name=tracked_repository.github_name,
+        is_tracked=tracked_repository.is_tracked,
+        created_at=tracked_repository.created_at,
+    )
+
+
 
 
 

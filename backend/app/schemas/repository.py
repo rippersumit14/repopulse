@@ -139,6 +139,23 @@ class RepositoryCommitActivityResponse(BaseModel):
     activity_level: str
 
 
+class RepositoryTrackResponse(BaseModel):
+    """
+    Repository successfully registered for tracking.
+    """
+
+    id: int
+    repository_url: str
+    github_owner: str
+    github_name: str
+    is_tracked: bool
+    created_at: datetime
+
+
+
+
+
+
 
 
 

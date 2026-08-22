@@ -1,6 +1,8 @@
 import { apiConfig } from './config'
 import { ApiError, mapApiError } from './errors'
 import type {
+  RepositoryCommitActivityResponse,
+  RepositoryLanguagesResponse,
   RepositoryMetadata,
   RepositoryUrlRequest,
   RepositoryValidationResponse,
@@ -64,6 +66,29 @@ export const fetchRepositoryMetadata = (
 ): Promise<RepositoryMetadata> =>
   postJson<RepositoryMetadata, RepositoryUrlRequest>(
     '/api/v1/repositories/metadata',
+    {
+      repository_url: repositoryUrl,
+    },
+  )
+
+// Fetches complete programming-language composition from the backend.
+export const fetchRepositoryLanguages = (
+  repositoryUrl: string,
+): Promise<RepositoryLanguagesResponse> =>
+  postJson<RepositoryLanguagesResponse, RepositoryUrlRequest>(
+    '/api/v1/repositories/languages',
+    {
+      repository_url: repositoryUrl,
+    },
+  )
+
+// Fetches recent commit activity summary. The backend currently returns
+// aggregate metrics, so the UI must not invent historical chart points.
+export const fetchRepositoryActivity = (
+  repositoryUrl: string,
+): Promise<RepositoryCommitActivityResponse> =>
+  postJson<RepositoryCommitActivityResponse, RepositoryUrlRequest>(
+    '/api/v1/repositories/activity',
     {
       repository_url: repositoryUrl,
     },

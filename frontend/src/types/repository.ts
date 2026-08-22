@@ -34,3 +34,23 @@ export interface RepositoryMetadata {
   updated_at: string
   pushed_at: string
 }
+
+export interface RepositoryLanguageBreakdown {
+  name: string
+  bytes: number
+  percentage: number
+}
+
+export interface RepositoryLanguagesResponse {
+  total_bytes: number
+  languages: RepositoryLanguageBreakdown[]
+}
+
+export interface RepositoryCommitActivityResponse {
+  total_recent_commits: number
+  commits_last_7_days: number
+  commits_last_30_days: number
+  last_commit_at: string | null
+  days_since_last_commit: number | null
+  activity_level: string
+}

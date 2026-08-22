@@ -20,12 +20,17 @@ class Settings(BaseSettings):
     # This will later be replaced by the deployed frontend URL.
     frontend_origin: str = "http://localhost:5173"
 
+    #PostgreSQL connection string loaded from .env.
+    database_url: str = "http://localhost:5173"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
     )
+
+
 
 
 @lru_cache
