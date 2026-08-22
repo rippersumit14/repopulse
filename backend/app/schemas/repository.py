@@ -1,4 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 class RepositoryAnalysisRequest(BaseModel):
@@ -150,6 +152,61 @@ class RepositoryTrackResponse(BaseModel):
     github_name: str
     is_tracked: bool
     created_at: datetime
+
+
+class HealthScoreResponse(BaseModel):
+    """
+    Explainable deterministic health score for a repository analysis.
+    """
+
+    overall_score: int
+    activity_score: int
+    maintenance_score: int
+    reasons: list[str]
+
+
+class RepositoryAnalysisResponse(BaseModel):
+    """
+    Result returned after a tracked repository is manually analyzed.
+    """
+
+    repository_id: int
+    repository: RepositoryMetadataResponse
+    languages: RepositoryLanguagesResponse
+    activity: RepositoryCommitActivityResponse
+    health_score: HealthScoreResponse
+    snapshot_id: int
+    analyzed_at: datetime
+
+
+class AnalysisSnapshotResponse(BaseModel):
+    id: int
+    repository_id: int
+    stars: int
+    forks: int
+    open_issues: int
+    contributors_count: int
+    commits_last_7_days: int
+    commits_last_30_days: int
+    activity_level: str
+    health_score: float | None
+    analyzed_at: datetime
+
+
+HistoryRange = Literal["7d", "30d", "12m"]
+
+
+class RepositoryHistoryPoint(BaseModel):
+    date: date
+    health_score: float | None
+    commits_last_30_days: int
+    stars: int
+    open_issues: int
+
+
+class RepositoryHistoryResponse(BaseModel):
+    range: HistoryRange
+    points: list[RepositoryHistoryPoint]
 
 
 
