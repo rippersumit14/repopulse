@@ -20,8 +20,16 @@ class Settings(BaseSettings):
     # This will later be replaced by the deployed frontend URL.
     frontend_origin: str = "http://localhost:5173"
 
-    #PostgreSQL connection string loaded from .env.
-    database_url: str = "http://localhost:5173"
+    # PostgreSQL connection string loaded from .env.
+    database_url: str = (
+        "postgresql+psycopg://postgres:postgres@localhost:5432/repopulse"
+    )
+
+    # JWT values are configurable so secrets and token lifetimes are not
+    # hardcoded in route or service code.
+    jwt_secret_key: str = "change-me-in-local-env-with-at-least-32-bytes"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30
 
     model_config = SettingsConfigDict(
         env_file=".env",
