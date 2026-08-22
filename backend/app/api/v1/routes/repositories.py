@@ -1,23 +1,41 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_current_user
 from app.db.dependencies import get_db
 from app.integrations.github.client import GitHubClient
 from app.integrations.github.exceptions import GitHubRepositoryNotFoundError
+from app.models.repository import Repository
+from app.models.user import User
 from app.schemas.repository import (
+    HistoryRange,
     RepositoryAnalysisRequest,
+    RepositoryAnalysisResponse,
     RepositoryCommitActivityResponse,
+    RepositoryHistoryResponse,
     RepositoryLanguagesResponse,
     RepositoryMetadataResponse,
     RepositoryTrackResponse,
+)
+from app.services.repository_analyzer import (
+    analyze_repository,
+    map_repository_metadata,
 )
 from app.services.repository_analysis import (
     calculate_commit_activity,
     calculate_language_breakdown,
 )
-from app.services.repository_tracking import track_repository
+from app.services.repository_tracking import (
+    track_repository_for_user,
+    user_tracks_repository,
+)
+from app.services.snapshots import (
+    build_history_points,
+    create_snapshot,
+    get_repository_snapshots,
+)
 from app.utils.github import extract_github_repository
 
 
@@ -77,46 +95,7 @@ async def get_repository_metadata(
             detail=str(exc),
         ) from exc
 
-    # Convert GitHub's large raw response into RepoPulse's
-    # smaller and stable repository metadata response.
-    return RepositoryMetadataResponse(
-        # Basic repository information
-        id=repository_data["id"],
-        name=repository_data["name"],
-        full_name=repository_data["full_name"],
-        description=repository_data.get("description"),
-        repository_url=repository_data["html_url"],
-
-        # Repository owner
-        owner=repository_data["owner"]["login"],
-        owner_avatar_url=repository_data["owner"]["avatar_url"],
-
-        # Repository statistics
-        stars=repository_data["stargazers_count"],
-        forks=repository_data["forks_count"],
-        watchers=repository_data["watchers_count"],
-        open_issues=repository_data["open_issues_count"],
-
-        # Technical information
-        language=repository_data.get("language"),
-        topics=repository_data.get("topics", []),
-        default_branch=repository_data["default_branch"],
-
-        # Repository state
-        license=(
-            repository_data["license"]["spdx_id"]
-            if repository_data.get("license")
-            else None
-        ),
-        is_fork=repository_data["fork"],
-        archived=repository_data["archived"],
-        visibility=repository_data["visibility"],
-
-        # Repository activity timestamps
-        created_at=repository_data["created_at"],
-        updated_at=repository_data["updated_at"],
-        pushed_at=repository_data["pushed_at"],
-    )
+    return map_repository_metadata(repository_data)
 
 
 @router.post(
@@ -124,8 +103,8 @@ async def get_repository_metadata(
     response_model=RepositoryLanguagesResponse,
 )
 async def get_repository_languages(
-        request: RepositoryAnalysisRequest,
-)-> RepositoryLanguagesResponse:
+    request: RepositoryAnalysisRequest,
+) -> RepositoryLanguagesResponse:
     """
     Fetch and analyze the programming languages used
     in a GitHub repository.
@@ -146,16 +125,14 @@ async def get_repository_languages(
         )
 
     except GitHubRepositoryNotFoundError as exc:
-        #Convert the internal GitHub error into an HTTP 404 Response.
+        # Convert the internal GitHub error into an HTTP 404 response.
         raise HTTPException(
             status_code=404,
             detail=str(exc),
         ) from exc
 
-
-    #Convert GitHub's byte counts into Repopulse percentages
+    # Convert GitHub's byte counts into RepoPulse percentages.
     return calculate_language_breakdown(language_bytes)
-
 
 
 @router.post(
@@ -163,14 +140,14 @@ async def get_repository_languages(
     response_model=RepositoryCommitActivityResponse,
 )
 async def get_repository_activity(
-        request: RepositoryAnalysisRequest,
+    request: RepositoryAnalysisRequest,
 ) -> RepositoryCommitActivityResponse:
     """
     Fetch recent repository commits and calculate
     basic commit activity metrics
     """
 
-    #Extract owner and repository name from the validated GitHub URL.
+    # Extract owner and repository name from the validated GitHub URL.
     owner, repository = extract_github_repository(
         request.repository_url
     )
@@ -180,7 +157,7 @@ async def get_repository_activity(
     github_client = GitHubClient()
 
     try:
-        #Fetch recent commit data from GitHub
+        # Fetch recent commit data from GitHub.
         commits = await github_client.get_repository_commits(
             owner=owner,
             repository=repository,
@@ -188,7 +165,7 @@ async def get_repository_activity(
         )
 
     except GitHubRepositoryNotFoundError as exc:
-        #Convert our internal GitHub error into an HTTP 404 response.
+        # Convert our internal GitHub error into an HTTP 404 response.
         raise HTTPException(
             status_code=404,
             detail=str(exc),
@@ -203,11 +180,12 @@ async def get_repository_activity(
     response_model=RepositoryTrackResponse,
 )
 async def track_github_repository(
-        request:RepositoryAnalysisRequest,
-        db: Session = Depends(get_db),
+    request: RepositoryAnalysisRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> RepositoryTrackResponse:
     """
-    Verify GitHub repository and store it for RepoPulse tracking
+    Verify GitHub repository and track it for the authenticated user.
     """
 
     owner, repository = extract_github_repository(
@@ -226,11 +204,12 @@ async def track_github_repository(
     except GitHubRepositoryNotFoundError as exc:
         raise HTTPException(
             status_code=404,
-            detail=str(exc)
+            detail=str(exc),
         ) from exc
 
-    tracked_repository, created = track_repository(
+    tracked_repository, _, _ = track_repository_for_user(
         db=db,
+        user=current_user,
         github_owner=repository_data["owner"]["login"],
         github_name=repository_data["name"],
         repository_url=repository_data["html_url"],
@@ -243,6 +222,127 @@ async def track_github_repository(
         github_name=tracked_repository.github_name,
         is_tracked=tracked_repository.is_tracked,
         created_at=tracked_repository.created_at,
+    )
+
+
+@router.post(
+    "/{repository_id}/analyze",
+    response_model=RepositoryAnalysisResponse,
+)
+async def analyze_tracked_repository(
+    repository_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RepositoryAnalysisResponse:
+    """
+    Manually analyze a repository tracked by the authenticated user.
+    """
+
+    repository = db.get(Repository, repository_id)
+
+    if repository is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tracked repository was not found.",
+        )
+
+    if not user_tracks_repository(
+        db=db,
+        user_id=current_user.id,
+        repository_id=repository_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not track this repository.",
+        )
+
+    try:
+        analysis = await analyze_repository(
+            owner=repository.github_owner,
+            repository=repository.github_name,
+        )
+    except GitHubRepositoryNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    snapshot = create_snapshot(
+        db=db,
+        repository_id=repository.id,
+        stars=analysis.metadata.stars,
+        forks=analysis.metadata.forks,
+        open_issues=analysis.metadata.open_issues,
+        contributors_count=0,
+        commits_last_7_days=analysis.activity.commits_last_7_days,
+        commits_last_30_days=analysis.activity.commits_last_30_days,
+        activity_level=analysis.activity.activity_level,
+        health_score=analysis.health_score.overall_score,
+    )
+
+    repository.last_analyzed_at = snapshot.analyzed_at
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return RepositoryAnalysisResponse(
+        repository_id=repository.id,
+        repository=analysis.metadata,
+        languages=analysis.languages,
+        activity=analysis.activity,
+        health_score=analysis.health_score,
+        snapshot_id=snapshot.id,
+        analyzed_at=snapshot.analyzed_at,
+    )
+
+
+@router.get(
+    "/{repository_id}/history",
+    response_model=RepositoryHistoryResponse,
+)
+def get_repository_history(
+    repository_id: int,
+    history_range: HistoryRange = Query(default="7d", alias="range"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RepositoryHistoryResponse:
+    """
+    Return chart-ready snapshot history for a repository the user tracks.
+    """
+
+    repository = db.get(Repository, repository_id)
+
+    if repository is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tracked repository was not found.",
+        )
+
+    if not user_tracks_repository(
+        db=db,
+        user_id=current_user.id,
+        repository_id=repository_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not track this repository.",
+        )
+
+    snapshots = get_repository_snapshots(
+        db=db,
+        repository_id=repository_id,
+        history_range=history_range,
+    )
+
+    return RepositoryHistoryResponse(
+        range=history_range,
+        points=build_history_points(
+            snapshots,
+            history_range=history_range,
+        ),
     )
 
 

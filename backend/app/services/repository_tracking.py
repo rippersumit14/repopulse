@@ -2,6 +2,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.repository import Repository
+from app.models.user import User
+from app.models.user_repository import UserRepository
 
 
 def get_repository_by_url(
@@ -110,3 +112,89 @@ def track_repository(
     )
 
     return repository, True
+
+
+def get_user_repository(
+    db: Session,
+    *,
+    user_id: int,
+    repository_id: int,
+) -> UserRepository | None:
+    statement = select(UserRepository).where(
+        UserRepository.user_id == user_id,
+        UserRepository.repository_id == repository_id,
+    )
+
+    return db.scalar(statement)
+
+
+def user_tracks_repository(
+    db: Session,
+    *,
+    user_id: int,
+    repository_id: int,
+) -> bool:
+    tracked_repository = get_user_repository(
+        db=db,
+        user_id=user_id,
+        repository_id=repository_id,
+    )
+
+    return tracked_repository is not None and tracked_repository.is_tracked
+
+
+def track_repository_for_user(
+    db: Session,
+    *,
+    user: User,
+    github_owner: str,
+    github_name: str,
+    repository_url: str,
+) -> tuple[Repository, UserRepository, bool]:
+    """
+    Track a repository for one authenticated user.
+
+    The Repository row is global. UserRepository stores ownership/tracking.
+    """
+
+    repository, _ = track_repository(
+        db=db,
+        github_owner=github_owner,
+        github_name=github_name,
+        repository_url=repository_url,
+    )
+
+    existing_user_repository = get_user_repository(
+        db=db,
+        user_id=user.id,
+        repository_id=repository.id,
+    )
+
+    if existing_user_repository is not None:
+        if not existing_user_repository.is_tracked:
+            existing_user_repository.is_tracked = True
+
+            try:
+                db.commit()
+                db.refresh(existing_user_repository)
+            except Exception:
+                db.rollback()
+                raise
+
+        return repository, existing_user_repository, False
+
+    user_repository = UserRepository(
+        user_id=user.id,
+        repository_id=repository.id,
+        is_tracked=True,
+    )
+
+    try:
+        db.add(user_repository)
+        db.commit()
+        db.refresh(user_repository)
+    except Exception:
+        db.rollback()
+        raise
+
+    return repository, user_repository, True

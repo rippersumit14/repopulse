@@ -1,17 +1,23 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+
+if TYPE_CHECKING:
+    from app.models.analysis_snapshot import AnalysisSnapshot
+    from app.models.user_repository import UserRepository
 
 
 class Repository(Base):
     """
     GitHub repository tracked by RepoPulse.
 
-    Analysis results will be stored separately so repository
-    information and historical analysis data remain independent.
+    Repository identity is stored here while historical analysis
+    results are stored separately in analysis_snapshots.
     """
 
     __tablename__ = "repositories"
@@ -39,22 +45,35 @@ class Repository(Base):
         index=True,
     )
 
-    # Determines whether scheduled analysis should continue.
+    # Whether background analysis should continue for this repository.
     is_tracked: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=True,
     )
 
-    # When RepoPulse last analyzed this repository.
+    # Most recent successful repository analysis.
     last_analyzed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    # Record creation time.
+    # When the repository was first added to RepoPulse.
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+    # One repository can have many historical analysis snapshots.
+    analysis_snapshots: Mapped[list["AnalysisSnapshot"]] = relationship(
+        back_populates="repository",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    user_repositories: Mapped[list["UserRepository"]] = relationship(
+        back_populates="repository",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
